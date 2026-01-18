@@ -1,10 +1,11 @@
 # streamlit run .\gold_predictor_app.py
-#pip install yfinance streamlit prophet
+#pip install yfinance streamlit prophet plotly
+from sys import exception
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
-from   import Prophet
+from   prophet import Prophet
 from prophet.plot import plot_plotly, plot_components_plotly
 
 st.title('Gold Price Prediction (EGP per Gram)')
@@ -94,36 +95,49 @@ def prepare_data(gold_data, exchange_rate_data, start_date, end_date, interval):
                 return df.tz_convert('UTC').tz_localize(None)
     if gold_data.empty:
         return pd.DataFrame()
-
-    # Flatten columns if needed
-    # if isinstance(gold_data.columns, pd.MultiIndex):
-    #     gold_data.columns = ['_'.join(col).strip() for col in gold_data.columns]
-    # if isinstance(exchange_rate_data.columns, pd.MultiIndex):
-    #     exchange_rate_data.columns = ['_'.join(col).strip() for col in exchange_rate_data.columns]
+    #Flatten columns if needed
+    if isinstance(gold_data.columns, pd.MultiIndex):
+        gold_data.columns = ['_'.join(col).strip() for col in gold_data.columns]
+    if isinstance(exchange_rate_data.columns, pd.MultiIndex):
+        exchange_rate_data.columns = ['_'.join(col).strip() for col in exchange_rate_data.columns]
 
     # Extract gold close
     if 'Close_GC=F' in gold_data.columns:
         gold_close = gold_data[['Close_GC=F']].rename(columns={'Close_GC=F': 'Gold_Close'})
     else:
         st.error("Gold data missing 'Close' column.")
+        st.error(f"gold_data cols:{gold_data.columns}")
         return pd.DataFrame()
 
     # Handle exchange rate
-    if not exchange_rate_data.empty and 'Close' in exchange_rate_data.columns:
-        fx_close = exchange_rate_data[['Close']].rename(columns={'Close': 'Exchange_Rate'})
+    if not exchange_rate_data.empty and 'Close_EGP=X' in exchange_rate_data.columns:
+        fx_close = exchange_rate_data[['Close_EGP=X']].rename(columns={'Close_EGP=X': 'Exchange_Rate'})
         print("Gold index tz:", gold_close.index.tz)
         print("FX index tz:", fx_close.index.tz)
-        merged = pd.merge(gold_close, fx_close, left_index=True, right_index=True, how='outer')
-    # else:
-    #     # Fallback: create a synthetic exchange rate series
-    #     fallback_rate = 50.0  # Adjust as needed (check current rate)
-    #     date_range = pd.date_range(start=start_date, end=end_date, freq=interval_to_pandas_freq(interval))
-    #     fx_close = pd.DataFrame({
-    #         'Exchange_Rate': fallback_rate
-    #     }, index=date_range)
-    #     fx_close = normalize_timezone(fx_close)
-    #     gold_close = normalize_timezone(gold_close)
-    #     merged = pd.merge(gold_close, fx_close, left_index=True, right_index=True, how='outer')
+        #merged = pd.merge(gold_close, fx_close, left_index=True, right_index=True, how='outer')
+    else:
+        # Fallback: create a synthetic exchange rate series
+        st.write(f'exch cols {exchange_rate_data.columns}')
+        st.write(f" exh data {exchange_rate_data}")
+        fallback_rate=0
+        try :
+           fallback_rate= yf.download('EGP=X', start=start_date, end=end_date)['Close'].mean()[0]
+           st.write(f'using fallback rate from mean of EGP=X {fallback_rate}')
+
+        except Exception:
+            fallback_rate = 50.0  # Adjust as needed (check current rate)
+            st.write('using static fallback rate from {fallback_rate} of EGP=X')
+            pass
+
+        st.write('final fallback rate:',fallback_rate)
+        
+        date_range = pd.date_range(start=start_date, end=end_date, freq=interval_to_pandas_freq(interval))
+        fx_close = pd.DataFrame({
+            'Exchange_Rate': fallback_rate
+        }, index=date_range)
+    fx_close = normalize_timezone(fx_close)
+    gold_close = normalize_timezone(gold_close)
+    merged = pd.merge(gold_close, fx_close, left_index=True, right_index=True, how='outer')
 
     # Clean data
     merged = merged.ffill().bfill()
@@ -136,8 +150,11 @@ def prepare_data(gold_data, exchange_rate_data, start_date, end_date, interval):
     GRAMS_PER_TROY_OUNCE = 31.1035
     merged['Gold_USD_per_Gram'] = merged['Gold_Close'] / GRAMS_PER_TROY_OUNCE
     merged['y'] = merged['Gold_USD_per_Gram'] * merged['Exchange_Rate']
+    merged.set_index(merged.index.tz_localize(None), inplace=True)
+    merged['index']=merged.index
 
     # Prophet format
+
     prophet_data = merged.reset_index()[['index', 'y']].rename(columns={'index': 'ds'})
     prophet_data['ds'] = pd.to_datetime(prophet_data['ds'])
     return prophet_data
