@@ -72,13 +72,13 @@ def fetch_data(start_str, end_str, interval):
             data = yf.download(ticker, start=start_str, end=end_str, interval=interval)
             if not data.empty and 'Close' in data.columns:
                 exchange_rate_data = data
-                st.info(f"✅ Successfully fetched exchange rate using ticker: {ticker}")
+                st.info(f"Successfully fetched exchange rate using ticker: {ticker}")
                 break
         except Exception:
             continue
 
     if exchange_rate_data.empty:
-        st.warning("⚠️ Could not fetch EGP exchange rate. Using fallback rate: 1 USD = 50 EGP.")
+        st.warning("Could not fetch EGP exchange rate. Using fallback rate: 1 USD = 50 EGP.")
         # We'll handle fallback in prepare_data
 
     return gold_data, exchange_rate_data
@@ -232,10 +232,3 @@ else:
     st.subheader('Latest Forecast Values')
     st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
 
-st.markdown("""
----
-💡 **Tips**:
-- **Hourly**: Limited to ~60 days of history; forecasts best for short-term.
-- **Monthly**: Needs at least 2–3 years of data for reliable seasonality.
-- Adjust **Historical Data** to balance model responsiveness vs. stability.
-""")
