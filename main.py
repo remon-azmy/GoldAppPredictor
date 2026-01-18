@@ -14,7 +14,7 @@ st.title('Gold Price Prediction (EGP per Gram)')
 st.sidebar.header('Prediction Settings')
 
 # Granularity selection
-granularity = st.sidebar.selectbox('Data Granularity', ['Hourly', 'Daily', 'Weekly', 'Monthly'])
+granularity = st.sidebar.selectbox('Data Granularity', ['Hourly', 'Daily', 'Weekly', 'Monthly'],index=1)
 
 # Map granularity to yfinance interval and Prophet frequency
 interval_map = {
